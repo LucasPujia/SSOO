@@ -17,7 +17,11 @@
 			"stdbool.h": "c",
 			"un.h": "c",
 			"ej19.h": "c",
-			"math.h": "c"
+			"math.h": "c",
+			"unistd.h": "c",
+			"types.h": "c",
+			"sigset_t.h": "c",
+			"__sigset_t.h": "c"
 		}
 	}
 }
