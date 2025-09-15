@@ -47,6 +47,11 @@ int main() {
             continue;
         }
 
+        if (numero == -69) {
+            printf("Mi trabajo aquí ha terminado\n");
+            break;
+        }
+
         if (write(server_socket, &numero, sizeof(numero)) == -1) {
             perror("Error");
             exit(EXIT_FAILURE);
