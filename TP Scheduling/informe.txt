@@ -1,0 +1,86 @@
+Primer intento:
+OPTIONS jobs 3
+OPTIONS queues 3
+OPTIONS allotments for queue  2 is   1
+OPTIONS quantum length for queue  2 is  10
+OPTIONS allotments for queue  1 is   1
+OPTIONS quantum length for queue  1 is  10
+OPTIONS allotments for queue  0 is   1
+OPTIONS quantum length for queue  0 is  10
+OPTIONS boost 0
+OPTIONS ioTime 5
+OPTIONS stayAfterIO False
+OPTIONS iobump False
+
+Job  0: startTime   0 - runTime  17 - ioFreq   0
+Job  1: startTime   0 - runTime   8 - ioFreq   0
+Job  2: startTime   0 - runTime  10 - ioFreq   0
+  
+Tenemos 3 tareas, 3 colas con allotment=1 y quantum=10 en cada una, sin boost (no hay protoclo anti-age).
+Todos tareas iguales, excepto por su duración.
+
+Resultados:
+  Job  0: startTime   0 - response   0 - turnaround  35
+  Job  1: startTime   0 - response  10 - turnaround  18
+  Job  2: startTime   0 - response  18 - turnaround  28
+
+  Avg  2: startTime n/a - response 9.33 - turnaround 27.00
+
+Si hubiésemos ejecutado con XXX (menor tiempo primero) hubiese sido:
+  Job  0: startTime   0 - response  18 - turnaround  35
+  Job  1: startTime   0 - response   0 - turnaround  8
+  Job  2: startTime   0 - response   8 - turnaround  16
+
+  Avg  2: startTime n/a - response 8.66 - turnaround 19.66
+ 
+Acá notamos que el response es muy similar, y que en realidad baja únicamente porque había una tarea que terminaba en menos de un quantum, y al ejecutarlo primero acelera el response time de todo el resto. En cambio, si todas las tareas tardaran más de un quantum, el response time subiría, ya que debe terminar de ejecutar una tarea antes de empezar otra
+En cuanto al turnaround sí se ven cambios significativos, en particular una diferencia ≈10 en las tareas más rápidas, similar al quantum, debido a que la tarea más lenta ya no se "come" ese tiempo.
+
+Segundo intento:
+Mismas opciones, con tareas:
+  Job  0: startTime   0 - runTime  25 - ioFreq   0
+  Job  1: startTime   0 - runTime  13 - ioFreq   0
+  Job  2: startTime   0 - runTime  15 - ioFreq   0
+
+Resultados:
+  Job  0: startTime   0 - response   0 - turnaround  53
+  Job  1: startTime   0 - response  10 - turnaround  43
+  Job  2: startTime   0 - response  20 - turnaround  48
+
+  Avg  2: startTime n/a - response 10.00 - turnaround 48.00
+
+Vemos que son 3 tareas idénticas que no hacen I/O ni le entregan el control al sistema, y por esto vamos a terminar haciendo una ejecución al estilo Round-Robin a pesar de que haya colas/prioridades, porque las tareas tendrán el mismo comportamiento y cambiarán de prioridad al mismo tiempo. 
+Esto podemos notarlo por un turnaround muy similar entre cada una, con una diferencia ≤5 entre una tarea y la siguiente de menor tiempo.
+Si consideramos de vuelta la política XXX, nos da
+  Job  0: startTime   0 - response  28 - turnaround  56
+  Job  1: startTime   0 - response   0 - turnaround  13
+  Job  2: startTime   0 - response  13 - turnaround  28
+
+  Avg  2: startTime n/a - response 13.66 - turnaround 30.66
+Acá notamos que, como todas las tareas tardan más de un quantum en ser ejecutadas, el response time aumenta por lo dicho anteriormente.
+Sin embargo, el turnaround mejora (y de hecho con esta política se obtiene el valor óptimo), quedando el promedio (muy) por debajo incluso del menor turnaround de la ejecución original.
+
+
+
+Empiezo ejecutando: ./mlfq.py -c -n 3 -q 10 -a 100 -j 3 -m 1000 -B 500 -l 0,180,0:0,200,0:0,500,0
+Here is the list of inputs:
+OPTIONS jobs 3
+OPTIONS queues 3
+OPTIONS allotments for queue  2 is 100
+OPTIONS quantum length for queue  2 is  10
+OPTIONS allotments for queue  1 is 100
+OPTIONS quantum length for queue  1 is  10
+OPTIONS allotments for queue  0 is 100
+OPTIONS quantum length for queue  0 is  10
+OPTIONS boost 500
+OPTIONS ioTime 5
+OPTIONS stayAfterIO False
+OPTIONS iobump False
+
+Mi primera impresión tras analizar la ejecución es que las tareas nunca cambiaron de prioridad, siempre fue de 2. 
+La suposición es que el allotment fue muy largo, y posiblemente medido en una unidad distinta a la del quantum (tick vs ms). Pareciera que 10 ticks = 1 allotment.
+
+Otra cosa a notar es que el J0 terminó en el T520, pero el J1 terminó recién en el T570, 50ms después a pesar de que la diferencia entre estos era de 20ms y quedaban ejecutándose solo 2 tareas, lo que daba la sensación de que hubiera terminado 10ms antes.
+Esto se debió a que empezó antes J0, teniendo una "ventaja" de 10ms.
+
+Para poder observar un cambio en las prioridades, bajaré el allotment a 10 y el boost a 50. Mantendré el resto de los parámetros
