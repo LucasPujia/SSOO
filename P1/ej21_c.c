@@ -7,6 +7,7 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include "ej19.h"
+#include <signal.h>
 
 int main() {
     int server_socket;
@@ -27,15 +28,16 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    // if (fork() == 0) {
-    //     while (true) {
-    //         int mensaje;
-    //         if(read(server_socket, &mensaje, sizeof(mensaje)) == -1) {
-    //             perror("Error reading");
-    //         };  
-    //         printf("%i | Mensaje recibido! Es %i", i, mensaje);
-    //     }
-    // }
+    int pid;
+    if ((pid = fork()) == 0) {
+        while (true) {
+            int mensaje;
+            if(read(server_socket, &mensaje, sizeof(mensaje)) == -1) {
+                perror("Error reading");
+            };  
+            printf("\n%i | Mensaje recibido! Es %i\n", i, mensaje);
+        }
+    }
 
     while(true) {
         int numero = 0;
@@ -54,10 +56,12 @@ int main() {
 
         if (write(server_socket, &numero, sizeof(numero)) == -1) {
             perror("Error");
+            kill(pid, SIGKILL);
             exit(EXIT_FAILURE);
         }
     }
 
+    kill(pid, SIGKILL);
     close(server_socket);
     exit(EXIT_SUCCESS);
 }

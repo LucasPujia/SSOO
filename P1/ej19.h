@@ -18,9 +18,6 @@ void safe_bind(int sockfd, struct sockaddr_un* addr, socklen_t addrlen) {
     };
 }
 
-/* Prepare to accept connections on socket FD.
-N connection requests will be queued before further requests are refused.
-Returns 0 on success, -1 for errors. */
 void safe_listen2(int sockfd, struct sockaddr_un* addr, int n) {
     printf("Escuchando desde %s\n", addr->sun_path);
     
