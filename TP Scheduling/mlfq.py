@@ -29,6 +29,10 @@ def Abort(str):
     sys.stderr.write(str + '\n')
     exit(1)
 
+def printThroughput(currTime, finishedJobs):
+    if options.throughput and currTime % 2 == 0:
+        print('[ time %d ] THROUGHTPUT: %.2f' % (currTime, float(finishedJobs)/float(currTime)))
+    return
 
 #
 # PARSE ARGUMENTS
@@ -82,6 +86,9 @@ parser.add_option('-l', '--jlist', default='',
                   action='store', type='string', dest='jlist')
 parser.add_option('-c', help='compute answers for me', action='store_true',
                   default=False, dest='solve')
+parser.add_option('-T', '--throughput', default=False,
+                  help='if specified, print throughput every 2 time units',
+                  action='store_true', dest='throughput')
 
 (options, args) = parser.parse_args()
 
@@ -152,7 +159,7 @@ if options.jlist != '':
         job[jobCnt] = {'currPri':hiQueue, 'ticksLeft':quantum[hiQueue],
                        'allotLeft':allotment[hiQueue], 'startTime':startTime,
                        'runTime':runTime, 'timeLeft':runTime, 'ioFreq':ioFreq, 'doingIO':False,
-                       'firstRun':-1}
+                       'firstRun':-1, 'waitingSince':-1, 'waitingTime': 0}
         if startTime not in ioDone:
             ioDone[startTime] = []
         ioDone[startTime].append((jobCnt, 'JOB BEGINS'))
@@ -167,7 +174,7 @@ else:
         job[jobCnt] = {'currPri':hiQueue, 'ticksLeft':quantum[hiQueue],
                        'allotLeft':allotment[hiQueue], 'startTime':startTime,
                        'runTime':runTime, 'timeLeft':runTime, 'ioFreq':ioFreq, 'doingIO':False,
-                       'firstRun':-1}
+                       'firstRun':-1, 'waitingSince':-1, 'waitingTime': 0}
         if startTime not in ioDone:
             ioDone[startTime] = []
         ioDone[startTime].append((jobCnt, 'JOB BEGINS'))
@@ -257,6 +264,8 @@ while finishedJobs < totalJobs:
             q = job[j]['currPri']
             job[j]['doingIO'] = False
             print('[ time %d ] %s by JOB %d' % (currTime, type, j))
+            # el job entra a la cola ahora, empieza a esperar desde currTime
+            job[j]['waitingSince'] = currTime
             if options.iobump == False or type == 'JOB BEGINS':
                 queue[q].append(j)
             else:
@@ -276,9 +285,11 @@ while finishedJobs < totalJobs:
 
     job[currJob]['timeLeft']  -= 1
     job[currJob]['ticksLeft'] -= 1
+    job[currJob]['waitingTime'] += currTime - job[currJob]['waitingSince']
 
     if job[currJob]['firstRun'] == -1:
         job[currJob]['firstRun'] = currTime
+
 
     runTime   = job[currJob]['runTime']
     ioFreq    = job[currJob]['ioFreq']
@@ -286,8 +297,8 @@ while finishedJobs < totalJobs:
     allotLeft = job[currJob]['allotLeft']
     timeLeft  = job[currJob]['timeLeft']
 
-    print('[ time %d ] Run JOB %d at PRIORITY %d [ TICKS %d ALLOT %d TIME %d (of %d) ]' % \
-          (currTime, currJob, currQueue, ticksLeft, allotLeft, timeLeft, runTime))
+    print('[ time %d ] Run JOB %d at PRIORITY %d [ TICKS %d ALLOT %d TIME %d (of %d) WAITING %d ]' % \
+          (currTime, currJob, currQueue, ticksLeft, allotLeft, timeLeft, runTime, job[currJob]['waitingTime']))
 
     if timeLeft < 0:
         Abort('Error: should never have less than 0 time left to run')
@@ -295,6 +306,9 @@ while finishedJobs < totalJobs:
 
     # UPDATE TIME
     currTime += 1
+
+    # Si en el próximo tick entra otra tarea a la cabeza de la cola, no quiero perder la cuenta
+    job[currJob]['waitingSince'] = currTime
 
     # CHECK FOR JOB ENDING
     if timeLeft == 0:
@@ -305,7 +319,10 @@ while finishedJobs < totalJobs:
         done = queue[currQueue].pop(0)
         # print('AFTER POP', queue)
         assert(done == currJob)
+        printThroughput(currTime, finishedJobs)
         continue
+
+    printThroughput(currTime, finishedJobs)
 
     # CHECK FOR IO
     issuedIO = False
@@ -364,12 +381,15 @@ print('')
 print('Final statistics:')
 responseSum   = 0
 turnaroundSum = 0
+waitingSum    = 0
 for i in range(numJobs):
     response   = job[i]['firstRun'] - job[i]['startTime']
     turnaround = job[i]['endTime'] - job[i]['startTime']
-    print('  Job %2d: startTime %3d - response %3d - turnaround %3d' % (i, job[i]['startTime'], response, turnaround))
+    waiting    = job[i]['waitingTime']
+    print('  Job %2d: startTime %3d - response %3d - turnaround %3d - waiting %3d' % (i, job[i]['startTime'], response, turnaround, waiting))
     responseSum   += response
     turnaroundSum += turnaround
+    waitingSum    += waiting
 
-print('\n  Avg %2d: startTime n/a - response %.2f - turnaround %.2f' % (i, float(responseSum)/numJobs, float(turnaroundSum)/numJobs))
+print('\n  Avg %2d: startTime n/a - response %.2f - turnaround %.2f - waiting %.2f' % (i, float(responseSum)/numJobs, float(turnaroundSum)/numJobs, float(waitingSum)/numJobs))
 print('\n')
